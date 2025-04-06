@@ -8,12 +8,20 @@ import os
 from dotenv import load_dotenv
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging to not show sensitive information
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    # Remove potentially sensitive fields
+    filters=[lambda record: 'api_key' not in record.getMessage().lower()]
+)
 logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+# Check if running in Streamlit Cloud
+is_cloud = os.getenv('STREAMLIT_RUNTIME', '') == 'cloud'
 
 # Page configuration
 st.set_page_config(
@@ -159,24 +167,27 @@ def main():
     with st.sidebar:
         st.header("Controls")
         
-        # Fetch button for latest news
-        if st.button("🔄 Fetch Latest News"):
-            with st.spinner("Fetching latest security news..."):
-                try:
-                    new_news = fetch_security_news()
-                    if not new_news.empty:
-                        new_news['ai_analysis'] = new_news.apply(
-                            lambda row: analyze_security_news(row['title'], row['summary']), 
-                            axis=1
-                        )
-                        new_news['risk_level'] = new_news['ai_analysis'].apply(get_risk_level)
-                        store_news(new_news)
-                        st.success("News updated successfully!")
-                    else:
-                        st.warning("No new news found.")
-                except Exception as e:
-                    logger.error(f"Error fetching news: {str(e)}")
-                    st.error("Error fetching news. Please check the logs.")
+        # Only show fetch button in local development
+        if not is_cloud:
+            if st.button("🔄 Fetch Latest News"):
+                with st.spinner("Fetching latest security news..."):
+                    try:
+                        new_news = fetch_security_news()
+                        if not new_news.empty:
+                            new_news['ai_analysis'] = new_news.apply(
+                                lambda row: analyze_security_news(row['title'], row['summary']), 
+                                axis=1
+                            )
+                            new_news['risk_level'] = new_news['ai_analysis'].apply(get_risk_level)
+                            store_news(new_news)
+                            st.success("News updated successfully!")
+                        else:
+                            st.warning("No new news found.")
+                    except Exception as e:
+                        logger.error(f"Error fetching news: {type(e).__name__}")  # Log error type only
+                        st.error("Error fetching news. Please check the logs.")
+        else:
+            st.info("News updates are automated and run daily. Manual updates are disabled in production.")
         
         st.markdown("---")
         st.header("Filter Options")

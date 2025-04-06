@@ -7,8 +7,11 @@ import logging
 from requests.exceptions import RequestException
 import time
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging to avoid sensitive data
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 def parse_date(date_str, source):
@@ -40,13 +43,7 @@ def parse_date(date_str, source):
         return datetime.now().strftime('%Y-%m-%d')
 
 def fetch_security_news(target_date=None):
-    """
-    Fetch security news from various sources.
-    
-    Args:
-        target_date (datetime.date, optional): Specific date to fetch news for.
-                                             If None, fetches latest news.
-    """
+    """Fetch security news from various sources"""
     try:
         logger.info(f"Fetching security news for {'latest' if target_date is None else target_date}")
         
@@ -56,33 +53,31 @@ def fetch_security_news(target_date=None):
         # Fetch from Security Week
         try:
             security_week_items = fetch_security_week(target_date)
-            news_items.extend(security_week_items)
             logger.info(f"Retrieved {len(security_week_items)} items from Security Week")
+            news_items.extend(security_week_items)
         except Exception as e:
-            logger.error(f"Error fetching from Security Week: {str(e)}")
+            logger.error(f"Security Week fetch error: {type(e).__name__}")  # Log error type only
         
         # Fetch from The Hacker News
         try:
             hacker_news_items = fetch_hacker_news(target_date)
-            news_items.extend(hacker_news_items)
             logger.info(f"Retrieved {len(hacker_news_items)} items from The Hacker News")
+            news_items.extend(hacker_news_items)
         except Exception as e:
-            logger.error(f"Error fetching from The Hacker News: {str(e)}")
-        
+            logger.error(f"Hacker News fetch error: {type(e).__name__}")  # Log error type only
+            
         # Convert to DataFrame
         if news_items:
             df = pd.DataFrame(news_items)
-            # Sort by date descending
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date', ascending=False)
-            logger.info(f"Total news items fetched: {len(df)}")
             return df
         else:
             logger.warning("No news items found")
             return pd.DataFrame()
             
     except Exception as e:
-        logger.error(f"Error in fetch_security_news: {str(e)}")
+        logger.error(f"General fetch error: {type(e).__name__}")  # Log error type only
         return pd.DataFrame()
 
 def categorize_news(title, summary):
