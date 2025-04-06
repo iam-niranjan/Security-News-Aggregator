@@ -1,3 +1,4 @@
+
 # Virtual Environment
 venv/
 env/
@@ -28,13 +29,10 @@ wheels/
 # Environment variables
 .env
 
-# Database
-*.db
-*.sqlite3
-
 # IDE specific files
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
+
