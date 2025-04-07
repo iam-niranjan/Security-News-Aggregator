@@ -63,7 +63,7 @@ jobs:
 
         # Show today's news items specifically
         echo "\nToday's news items:"
-        python -c "import sqlite3, json, datetime; conn=sqlite3.connect('security_news.db'); conn.row_factory = sqlite3.Row; c=conn.cursor(); today=datetime.datetime.now().strftime('%Y-%m-%d'); c.execute('SELECT title, source, date FROM news WHERE date = ? ORDER BY date DESC', (today,)); print(json.dumps([dict(row) for row in c.fetchall()], indent=2))"
+        python -c "import sqlite3, json, datetime; conn=sqlite3.connect('security_news.db'); conn.row_factory = sqlite3.Row; c=conn.cursor(); today=datetime.datetime.now().strftime('%Y-%m-%d'); c.execute('SELECT title, source, date FROM news WHERE date = ? ORDER BY date DESC', (today,)); today_items = [dict(row) for row in c.fetchall()]; print(f'Found {len(today_items)} items with today\'s date ({today})'); print(json.dumps(today_items, indent=2))"
 
         # Compare with backup to see if there are new items
         if [ -f security_news.db.bak ]; then

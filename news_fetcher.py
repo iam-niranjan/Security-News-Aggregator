@@ -17,30 +17,56 @@ logger = logging.getLogger(__name__)
 def parse_date(date_str, source):
     """
     Parse date string from different sources into a standardized format
+    Always returns the date in YYYY-MM-DD format
     """
     try:
+        today = datetime.now().date()
+
         if source == 'The Hacker News':
             # Example: "2 days ago" or "5 hours ago"
             if 'ago' in date_str.lower():
                 num = int(re.search(r'\d+', date_str).group())
                 if 'day' in date_str.lower():
-                    return (datetime.now() - timedelta(days=num)).strftime('%Y-%m-%d')
+                    return (today - timedelta(days=num)).strftime('%Y-%m-%d')
                 elif 'hour' in date_str.lower():
-                    return datetime.now().strftime('%Y-%m-%d')
-            return datetime.now().strftime('%Y-%m-%d')
+                    # If it's from today (hours ago), explicitly use today's date
+                    return today.strftime('%Y-%m-%d')
+                else:
+                    # For any other "ago" format, use today's date
+                    return today.strftime('%Y-%m-%d')
+            elif 'today' in date_str.lower():
+                # Explicitly handle "today" text
+                return today.strftime('%Y-%m-%d')
+            elif 'yesterday' in date_str.lower():
+                # Explicitly handle "yesterday" text
+                return (today - timedelta(days=1)).strftime('%Y-%m-%d')
+            else:
+                # For any other format from Hacker News, assume it's today
+                logger.info(f"Using today's date for Hacker News article with date string: '{date_str}'")
+                return today.strftime('%Y-%m-%d')
         elif source == 'Security Week':
             # Handle both ISO format and simple date format
             try:
                 # Try ISO format first
-                return datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d')
+                parsed_date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%SZ').date()
+                return parsed_date.strftime('%Y-%m-%d')
             except ValueError:
-                # If that fails, try simple date format
-                return datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+                try:
+                    # If that fails, try simple date format
+                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    return parsed_date.strftime('%Y-%m-%d')
+                except ValueError:
+                    # If all parsing fails, use today's date
+                    logger.warning(f"Could not parse date '{date_str}' from {source}, using today's date")
+                    return today.strftime('%Y-%m-%d')
         else:
-            return datetime.now().strftime('%Y-%m-%d')
+            # For unknown sources, use today's date
+            logger.warning(f"Unknown source '{source}', using today's date")
+            return today.strftime('%Y-%m-%d')
     except Exception as e:
         logger.error(f"Error parsing date '{date_str}' from {source}: {str(e)}")
-        return datetime.now().strftime('%Y-%m-%d')
+        # In case of any error, default to today's date
+        return datetime.now().date().strftime('%Y-%m-%d')
 
 def fetch_security_news(target_date=None):
     """Fetch security news from various sources"""

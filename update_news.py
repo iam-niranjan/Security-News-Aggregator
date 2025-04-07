@@ -62,6 +62,16 @@ def store_news(news_items):
                     ai_analysis = analyze_security_news(row['title'], row['summary'])
                     risk_level = get_risk_level(ai_analysis)
 
+                    # Ensure date is in correct format (YYYY-MM-DD)
+                    # If date is already a string, use it directly
+                    if isinstance(row['date'], str):
+                        date_str = row['date']
+                    else:
+                        # If it's a datetime object, format it
+                        date_str = row['date'].strftime('%Y-%m-%d')
+
+                    logger.info(f"Storing article with date: {date_str}")
+
                     # Insert new item
                     cursor.execute('''
                         INSERT INTO news (title, summary, source, url, date, category, ai_analysis, risk_level)
@@ -71,13 +81,13 @@ def store_news(news_items):
                         row['summary'],
                         row['source'],
                         row['url'],
-                        row['date'].strftime('%Y-%m-%d'),
+                        date_str,
                         row['category'],
                         ai_analysis,
                         risk_level
                     ))
                     new_items_count += 1
-                    logger.info(f"Added new article: {row['title']} from {row['source']}")
+                    logger.info(f"Added new article: {row['title']} from {row['source']} with date {date_str}")
                 else:
                     existing_items_count += 1
                     logger.debug(f"Skipping existing article: {row['title']} from {row['source']}")
@@ -116,6 +126,45 @@ def cleanup_old_news():
         if 'conn' in locals():
             conn.close()
 
+def update_article_dates():
+    """Update article dates to ensure consistency"""
+    try:
+        today = datetime.now().date()
+        today_str = today.strftime('%Y-%m-%d')
+        yesterday_str = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        conn = sqlite3.connect('security_news.db')
+        cursor = conn.cursor()
+
+        # Check for articles with yesterday's date that should be today
+        cursor.execute("""
+            SELECT id, title, source, date FROM news
+            WHERE date = ? AND source = 'The Hacker News'
+        """, (yesterday_str,))
+
+        yesterday_articles = cursor.fetchall()
+        updated_count = 0
+
+        if yesterday_articles:
+            logger.info(f"Found {len(yesterday_articles)} articles with yesterday's date that might need updating")
+
+            for article_id, title, source, date in yesterday_articles:
+                # Update to today's date
+                cursor.execute("UPDATE news SET date = ? WHERE id = ?", (today_str, article_id))
+                updated_count += 1
+                logger.info(f"Updated date for article: {title} from {date} to {today_str}")
+
+            conn.commit()
+            logger.info(f"Updated dates for {updated_count} articles")
+        else:
+            logger.info("No articles found that need date updating")
+
+    except Exception as e:
+        logger.error(f"Error updating article dates: {str(e)}")
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 def main():
     """Main function to update news database"""
     try:
@@ -139,6 +188,9 @@ def main():
         if not news_items.empty:
             # Store new articles
             store_news(news_items)
+
+            # Update article dates if needed
+            update_article_dates()
 
             # Cleanup old articles
             cleanup_old_news()
