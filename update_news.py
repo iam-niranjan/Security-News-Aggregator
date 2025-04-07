@@ -164,27 +164,40 @@ def update_article_dates():
             conn.commit()
             logger.info(f"Updated dates for {updated_count} articles")
         else:
-            # Try a more aggressive approach - update all Hacker News articles
+            # Check for articles with incorrect date formats
             cursor.execute("""
                 SELECT id, title, date FROM news
-                WHERE source = 'The Hacker News'
+                WHERE date NOT LIKE '____-__-__%' AND source = 'The Hacker News'
             """)
 
-            all_articles = cursor.fetchall()
-            if all_articles:
-                logger.info(f"Found {len(all_articles)} Hacker News articles that will be updated to today's date")
+            bad_format_articles = cursor.fetchall()
+            if bad_format_articles:
+                logger.info(f"Found {len(bad_format_articles)} Hacker News articles with incorrect date format")
 
-                for article_id, title, date in all_articles:
-                    # Force update to today's date with time
-                    new_date = f"{today_str} 00:00:00"
-                    cursor.execute("UPDATE news SET date = ? WHERE id = ?", (new_date, article_id))
-                    updated_count += 1
-                    logger.info(f"Force updated date for article: {title} from {date} to {new_date}")
+                for article_id, title, date in bad_format_articles:
+                    # Try to fix the date format
+                    try:
+                        # If it's a timestamp format, convert to YYYY-MM-DD
+                        if ' ' in date:
+                            date_part = date.split(' ')[0]
+                            if '-' in date_part and len(date_part) == 10:  # YYYY-MM-DD format
+                                new_date = date
+                            else:
+                                # Default to original publication date if possible
+                                new_date = date
+                        else:
+                            new_date = date
+
+                        cursor.execute("UPDATE news SET date = ? WHERE id = ?", (new_date, article_id))
+                        updated_count += 1
+                        logger.info(f"Fixed date format for article: {title} from {date} to {new_date}")
+                    except Exception as e:
+                        logger.error(f"Error fixing date format for article {title}: {str(e)}")
 
                 conn.commit()
-                logger.info(f"Force updated dates for {updated_count} articles")
+                logger.info(f"Fixed date formats for {updated_count} articles")
             else:
-                logger.info("No articles found that need date updating")
+                logger.info("No articles found with incorrect date formats")
 
     except Exception as e:
         logger.error(f"Error updating article dates: {str(e)}")

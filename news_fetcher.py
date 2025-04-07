@@ -41,9 +41,18 @@ def parse_date(date_str, source):
                 # Explicitly handle "yesterday" text
                 return (today - timedelta(days=1)).strftime('%Y-%m-%d')
             else:
-                # For any other format from Hacker News, assume it's today
-                logger.info(f"Using today's date for Hacker News article with date string: '{date_str}'")
-                return today.strftime('%Y-%m-%d')
+                # Try to parse date in format "Apr 04, 2025"
+                try:
+                    # Extract the date part (in case there's category info after it)
+                    date_parts = date_str.strip().split('\n')
+                    date_only = date_parts[0].strip()
+                    parsed_date = datetime.strptime(date_only, '%b %d, %Y').date()
+                    logger.info(f"Successfully parsed date '{date_only}' from Hacker News as {parsed_date}")
+                    return parsed_date.strftime('%Y-%m-%d')
+                except Exception as e:
+                    # If parsing fails, use today's date as fallback
+                    logger.warning(f"Could not parse date '{date_str}' from Hacker News: {str(e)}. Using today's date.")
+                    return today.strftime('%Y-%m-%d')
         elif source == 'Security Week':
             # Handle both ISO format and simple date format
             try:
