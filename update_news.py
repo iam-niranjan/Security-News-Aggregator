@@ -131,16 +131,18 @@ def update_article_dates():
     try:
         today = datetime.now().date()
         today_str = today.strftime('%Y-%m-%d')
-        yesterday_str = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+        yesterday = today - timedelta(days=1)
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
 
         conn = sqlite3.connect('security_news.db')
         cursor = conn.cursor()
 
         # Check for articles with yesterday's date that should be today
+        # Use LIKE to match partial date strings (handles both '2025-04-06' and '2025-04-06 00:00:00' formats)
         cursor.execute("""
             SELECT id, title, source, date FROM news
-            WHERE date = ? AND source = 'The Hacker News'
-        """, (yesterday_str,))
+            WHERE date LIKE ? AND source = 'The Hacker News'
+        """, (f"{yesterday_str}%",))
 
         yesterday_articles = cursor.fetchall()
         updated_count = 0
@@ -149,15 +151,40 @@ def update_article_dates():
             logger.info(f"Found {len(yesterday_articles)} articles with yesterday's date that might need updating")
 
             for article_id, title, source, date in yesterday_articles:
-                # Update to today's date
-                cursor.execute("UPDATE news SET date = ? WHERE id = ?", (today_str, article_id))
+                # Update to today's date (preserve time part if it exists)
+                if ' ' in date:  # Has time component
+                    new_date = f"{today_str} {date.split(' ')[1]}"
+                else:
+                    new_date = today_str
+
+                cursor.execute("UPDATE news SET date = ? WHERE id = ?", (new_date, article_id))
                 updated_count += 1
-                logger.info(f"Updated date for article: {title} from {date} to {today_str}")
+                logger.info(f"Updated date for article: {title} from {date} to {new_date}")
 
             conn.commit()
             logger.info(f"Updated dates for {updated_count} articles")
         else:
-            logger.info("No articles found that need date updating")
+            # Try a more aggressive approach - update all Hacker News articles
+            cursor.execute("""
+                SELECT id, title, date FROM news
+                WHERE source = 'The Hacker News'
+            """)
+
+            all_articles = cursor.fetchall()
+            if all_articles:
+                logger.info(f"Found {len(all_articles)} Hacker News articles that will be updated to today's date")
+
+                for article_id, title, date in all_articles:
+                    # Force update to today's date with time
+                    new_date = f"{today_str} 00:00:00"
+                    cursor.execute("UPDATE news SET date = ? WHERE id = ?", (new_date, article_id))
+                    updated_count += 1
+                    logger.info(f"Force updated date for article: {title} from {date} to {new_date}")
+
+                conn.commit()
+                logger.info(f"Force updated dates for {updated_count} articles")
+            else:
+                logger.info("No articles found that need date updating")
 
     except Exception as e:
         logger.error(f"Error updating article dates: {str(e)}")
