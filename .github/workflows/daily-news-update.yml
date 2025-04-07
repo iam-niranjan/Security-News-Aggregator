@@ -40,7 +40,7 @@ jobs:
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add security_news.db
-        # Force add the database file even if it's in .gitignore
+        # Force add and commit the database file
         git add -f security_news.db
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Daily news fetch" && git push)
+        git commit -m "Auto-update: Daily news fetch [$(date +'%Y-%m-%d %H:%M:%S')]" || echo "No changes to commit"
+        git push origin main || echo "No changes to push"
