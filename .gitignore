@@ -1,3 +1,5 @@
+# Keep the database file
+!security_news.db
 
 # Virtual Environment
 venv/
