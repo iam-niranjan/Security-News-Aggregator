@@ -45,10 +45,7 @@ wheels/
 *.swo
 .DS_Store
 
-# Database files
-!security_news.db
-!*.sqlite
-!*.sqlite3
+# No additional database exceptions needed
 
 # Logs
 *.log

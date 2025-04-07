@@ -15,12 +15,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
+        fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: '3.11'  # Using a more stable Python version
 
     - name: Install dependencies
       run: |
@@ -31,25 +32,36 @@ jobs:
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
+        # Make sure the database is tracked before making changes
+        touch security_news.db
+        git add security_news.db
+
+        # Run the update script
         python update_news.py
+
+        # Verify database was created and has data
         if [ ! -f security_news.db ]; then
           echo "Error: Database file not created"
           exit 1
         fi
+
+        # Print database stats
+        echo "Database file size: $(ls -la security_news.db | awk '{print $5}') bytes"
         python -c "import sqlite3; conn=sqlite3.connect('security_news.db'); c=conn.cursor(); c.execute('SELECT COUNT(*) FROM news'); print(f'News items in database: {c.fetchone()[0]}')"
 
-    - name: Commit and push if changes
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Commit and push changes
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        
-        # Check if database exists and has changes
-        if [ -f security_news.db ] && ! git diff --quiet security_news.db; then
-          git add security_news.db
-          git commit -m "Auto-update: Daily news fetch [$(date +'%Y-%m-%d %H:%M:%S')]"
-          git push origin main
-        else
+
+        # Force add the database file (ignoring .gitignore)
+        git add -f security_news.db
+
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
           echo "No changes to commit in security_news.db"
+        else
+          git commit -m "Auto-update: Daily news fetch [$(date +'%Y-%m-%d %H:%M:%S')]"
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+          echo "Successfully committed and pushed changes"
         fi
