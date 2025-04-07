@@ -35,35 +35,39 @@ if 'news_data' not in st.session_state:
     st.session_state.news_data = pd.DataFrame()
 
 # Database setup
-def init_db():
+def init_db_if_needed():
+    """Initialize the database if it doesn't exist or is empty"""
     try:
-        # Check if database exists
-        if not os.path.exists('security_news.db'):
-            conn = sqlite3.connect('security_news.db')
-            c = conn.cursor()
-            c.execute('''
+        conn = sqlite3.connect('security_news.db')
+        cursor = conn.cursor()
+        
+        # Check if the news table exists and has data
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='news'")
+        if not cursor.fetchone():
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS news
                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
                  title TEXT,
                  summary TEXT,
                  source TEXT,
-                 url TEXT,
+                 url TEXT UNIQUE,
                  date TEXT,
                  category TEXT,
                  ai_analysis TEXT,
-                 risk_level TEXT,
-                 priority TEXT)
+                 risk_level TEXT)
             ''')
             conn.commit()
-            logger.info("Database initialized successfully")
-        else:
-            logger.info("Database already exists")
+            logger.info("Database initialized - table created")
+        
+        # Check if table is empty
+        cursor.execute("SELECT COUNT(*) FROM news")
+        if cursor.fetchone()[0] == 0:
+            logger.warning("Database is empty - may need to run update")
+            
     except Exception as e:
-        logger.error(f"Error initializing database: {str(e)}")
-        st.error("Error initializing database. Please check the logs.")
+        logger.error(f"Database initialization error: {str(e)}")
     finally:
-        if 'conn' in locals():
-            conn.close()
+        conn.close()
 
 def get_stored_news():
     try:
@@ -156,8 +160,7 @@ def main():
     st.markdown("### Daily Security Updates for Security Teams")
     
     # Initialize database only once
-    if not os.path.exists('security_news.db'):
-        init_db()
+    init_db_if_needed()
     
     # Initialize session state for pagination
     if 'archive_page' not in st.session_state:

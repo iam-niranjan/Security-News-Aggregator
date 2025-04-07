@@ -29,10 +29,18 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         python update_news.py
+        if [ ! -f security_news.db ]; then
+          echo "Error: Database file not created"
+          exit 1
+        fi
+        # Check if database has data
+        python -c "import sqlite3; conn=sqlite3.connect('security_news.db'); c=conn.cursor(); c.execute('SELECT COUNT(*) FROM news'); print(f'News items in database: {c.fetchone()[0]}')"
 
     - name: Commit and push if changes
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add security_news.db
+        # Force add the database file even if it's in .gitignore
+        git add -f security_news.db
         git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Daily news fetch" && git push)

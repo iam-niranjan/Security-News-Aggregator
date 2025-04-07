@@ -28,6 +28,8 @@ wheels/
 
 # Environment variables
 .env
+.env.local
+.env.*
 
 # IDE specific files
 .idea/
@@ -35,4 +37,13 @@ wheels/
 *.swp
 *.swo
 .DS_Store
+
+# Database files
+!security_news.db
+!*.sqlite
+!*.sqlite3
+
+# Logs
+*.log
+logs/
 
