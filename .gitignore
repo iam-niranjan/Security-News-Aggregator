@@ -1,4 +1,9 @@
-# Keep the database file
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Explicitly allow security_news.db
 !security_news.db
 
 # Virtual Environment
