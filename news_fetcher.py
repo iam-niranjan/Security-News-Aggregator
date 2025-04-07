@@ -46,10 +46,10 @@ def fetch_security_news(target_date=None):
     """Fetch security news from various sources"""
     try:
         logger.info(f"Fetching security news for {'latest' if target_date is None else target_date}")
-        
+
         # Initialize empty list to store news items
         news_items = []
-        
+
         # Fetch from Security Week
         try:
             security_week_items = fetch_security_week(target_date)
@@ -57,7 +57,7 @@ def fetch_security_news(target_date=None):
             news_items.extend(security_week_items)
         except Exception as e:
             logger.error(f"Security Week fetch error: {type(e).__name__}")  # Log error type only
-        
+
         # Fetch from The Hacker News
         try:
             hacker_news_items = fetch_hacker_news(target_date)
@@ -65,7 +65,7 @@ def fetch_security_news(target_date=None):
             news_items.extend(hacker_news_items)
         except Exception as e:
             logger.error(f"Hacker News fetch error: {type(e).__name__}")  # Log error type only
-            
+
         # Convert to DataFrame
         if news_items:
             df = pd.DataFrame(news_items)
@@ -75,7 +75,7 @@ def fetch_security_news(target_date=None):
         else:
             logger.warning("No news items found")
             return pd.DataFrame()
-            
+
     except Exception as e:
         logger.error(f"General fetch error: {type(e).__name__}")  # Log error type only
         return pd.DataFrame()
@@ -95,11 +95,11 @@ def categorize_news(title, summary):
         'Privacy': ['privacy', 'data protection', 'encryption', 'PII', 'personal data'],
         'Identity & Access': ['authentication', 'authorization', 'IAM', 'identity', 'access control', 'SSO']
     }
-    
+
     # Convert text to lowercase for case-insensitive matching
     title_lower = title.lower()
     summary_lower = summary.lower()
-    
+
     # Check each category's keywords
     category_scores = {}
     for category, keywords in categories.items():
@@ -110,7 +110,7 @@ def categorize_news(title, summary):
             if keyword.lower() in summary_lower:
                 score += 1
         category_scores[category] = score
-    
+
     # Get category with highest score
     max_score = max(category_scores.values())
     if max_score > 0:
@@ -118,7 +118,7 @@ def categorize_news(title, summary):
         for category in categories.keys():
             if category_scores[category] == max_score:
                 return category
-    
+
     # Default category if no keywords match
     return "Threat Intelligence"
 
@@ -129,7 +129,7 @@ def fetch_security_week(target_date=None):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = soup.find_all('article', class_='article')
-        
+
         news_items = []
         for article in articles:
             try:
@@ -137,13 +137,18 @@ def fetch_security_week(target_date=None):
                 summary = article.find('div', class_='article-summary').text.strip()
                 link = article.find('a')['href']
                 date_str = article.find('time')['datetime']
-                
+
                 article_date = parse_date(date_str, 'Security Week')
-                
+                article_date_obj = pd.to_datetime(article_date).date()
+
                 # Skip if target_date is specified and doesn't match
-                if target_date and pd.to_datetime(article_date).date() != target_date:
-                    continue
-                
+                if target_date:
+                    if article_date_obj != target_date:
+                        logger.debug(f"Skipping article from {article_date_obj}, not matching target date {target_date}")
+                        continue
+                    else:
+                        logger.info(f"Found article from target date {target_date}: {title}")
+
                 news_items.append({
                     'title': title,
                     'summary': summary,
@@ -155,7 +160,7 @@ def fetch_security_week(target_date=None):
             except Exception as e:
                 logger.error(f"Error processing Security Week article: {str(e)}")
                 continue
-                
+
         return news_items
     except Exception as e:
         logger.error(f"Error in fetch_security_week: {str(e)}")
@@ -168,7 +173,7 @@ def fetch_hacker_news(target_date=None):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         articles = soup.find_all('div', class_='body-post')
-        
+
         news_items = []
         for article in articles:
             try:
@@ -176,13 +181,18 @@ def fetch_hacker_news(target_date=None):
                 summary = article.find('div', class_='home-desc').text.strip()
                 link = article.find('a', class_='story-link')['href']
                 date_str = article.find('div', class_='item-label').text.strip()
-                
+
                 article_date = parse_date(date_str, 'The Hacker News')
-                
+                article_date_obj = pd.to_datetime(article_date).date()
+
                 # Skip if target_date is specified and doesn't match
-                if target_date and pd.to_datetime(article_date).date() != target_date:
-                    continue
-                
+                if target_date:
+                    if article_date_obj != target_date:
+                        logger.debug(f"Skipping article from {article_date_obj}, not matching target date {target_date}")
+                        continue
+                    else:
+                        logger.info(f"Found article from target date {target_date}: {title}")
+
                 news_items.append({
                     'title': title,
                     'summary': summary,
@@ -194,7 +204,7 @@ def fetch_hacker_news(target_date=None):
             except Exception as e:
                 logger.error(f"Error processing Hacker News article: {str(e)}")
                 continue
-                
+
         return news_items
     except Exception as e:
         logger.error(f"Error in fetch_hacker_news: {str(e)}")
@@ -217,7 +227,7 @@ def determine_category(title, summary):
     """
     try:
         text = f"{title} {summary}".lower()
-        
+
         # Keywords for different categories
         categories = {
             'Vulnerabilities': ['vulnerability', 'cve', 'exploit', 'patch', 'zero-day'],
@@ -228,18 +238,18 @@ def determine_category(title, summary):
             'Privacy': ['privacy', 'data protection', 'personal data', 'pii'],
             'Identity & Access': ['iam', 'pam', 'identity', 'authentication', 'authorization']
         }
-        
+
         # Count matches for each category
         category_scores = {}
         for category, keywords in categories.items():
             score = sum(1 for keyword in keywords if keyword in text)
             category_scores[category] = score
-        
+
         # Return category with highest score, or 'Other' if no matches
         if not any(category_scores.values()):
             return 'Other'
-        
+
         return max(category_scores.items(), key=lambda x: x[1])[0]
     except Exception as e:
         logger.error(f"Error in determine_category: {str(e)}")
-        return 'Other' 
+        return 'Other'

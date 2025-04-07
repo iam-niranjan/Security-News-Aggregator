@@ -36,7 +36,15 @@ jobs:
         touch security_news.db
         git add security_news.db
 
-        # Run the update script
+        # Create a backup of the current database for comparison
+        if [ -f security_news.db ]; then
+          cp security_news.db security_news.db.bak
+          echo "Created backup of existing database"
+          python -c "import sqlite3; conn=sqlite3.connect('security_news.db.bak'); c=conn.cursor(); c.execute('SELECT COUNT(*) FROM news'); print(f'News items in original database: {c.fetchone()[0]}')"
+        fi
+
+        # Run the update script to fetch today's news
+        echo "Running news update script to fetch today's security news..."
         python update_news.py
 
         # Verify database was created and has data
@@ -47,7 +55,22 @@ jobs:
 
         # Print database stats
         echo "Database file size: $(ls -la security_news.db | awk '{print $5}') bytes"
-        python -c "import sqlite3; conn=sqlite3.connect('security_news.db'); c=conn.cursor(); c.execute('SELECT COUNT(*) FROM news'); print(f'News items in database: {c.fetchone()[0]}')"
+        python -c "import sqlite3; conn=sqlite3.connect('security_news.db'); c=conn.cursor(); c.execute('SELECT COUNT(*) FROM news'); print(f'News items in updated database: {c.fetchone()[0]}')"
+
+        # Show some sample news items for verification
+        echo "\nSample of latest news items:"
+        python -c "import sqlite3, json; conn=sqlite3.connect('security_news.db'); conn.row_factory = sqlite3.Row; c=conn.cursor(); c.execute('SELECT title, source, date FROM news ORDER BY date DESC LIMIT 3'); print(json.dumps([dict(row) for row in c.fetchall()], indent=2))"
+
+        # Show today's news items specifically
+        echo "\nToday's news items:"
+        python -c "import sqlite3, json, datetime; conn=sqlite3.connect('security_news.db'); conn.row_factory = sqlite3.Row; c=conn.cursor(); today=datetime.datetime.now().strftime('%Y-%m-%d'); c.execute('SELECT title, source, date FROM news WHERE date = ? ORDER BY date DESC', (today,)); print(json.dumps([dict(row) for row in c.fetchall()], indent=2))"
+
+        # Compare with backup to see if there are new items
+        if [ -f security_news.db.bak ]; then
+          echo "\nChecking for new items..."
+          python -c "import sqlite3; conn1=sqlite3.connect('security_news.db.bak'); c1=conn1.cursor(); conn2=sqlite3.connect('security_news.db'); c2=conn2.cursor(); c1.execute('SELECT COUNT(*) FROM news'); old_count=c1.fetchone()[0]; c2.execute('SELECT COUNT(*) FROM news'); new_count=c2.fetchone()[0]; print(f'Old count: {old_count}, New count: {new_count}, Difference: {new_count - old_count}')"
+          rm security_news.db.bak
+        fi
 
     - name: Commit and push changes
       run: |

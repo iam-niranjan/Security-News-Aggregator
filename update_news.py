@@ -45,7 +45,14 @@ def store_news(news_items):
     try:
         conn = sqlite3.connect('security_news.db')
         cursor = conn.cursor()
-        
+
+        # Track statistics
+        new_items_count = 0
+        existing_items_count = 0
+        error_items_count = 0
+
+        logger.info(f"Processing {len(news_items)} news items for database storage")
+
         for _, row in news_items.iterrows():
             try:
                 # Check if URL already exists
@@ -54,7 +61,7 @@ def store_news(news_items):
                     # Add AI analysis
                     ai_analysis = analyze_security_news(row['title'], row['summary'])
                     risk_level = get_risk_level(ai_analysis)
-                    
+
                     # Insert new item
                     cursor.execute('''
                         INSERT INTO news (title, summary, source, url, date, category, ai_analysis, risk_level)
@@ -69,13 +76,18 @@ def store_news(news_items):
                         ai_analysis,
                         risk_level
                     ))
-                    logger.info(f"Added new article: {row['title']}")
+                    new_items_count += 1
+                    logger.info(f"Added new article: {row['title']} from {row['source']}")
+                else:
+                    existing_items_count += 1
+                    logger.debug(f"Skipping existing article: {row['title']} from {row['source']}")
             except Exception as e:
+                error_items_count += 1
                 logger.error(f"Error processing article {row['title']}: {str(e)}")
                 continue
-        
+
         conn.commit()
-        logger.info("News database updated successfully")
+        logger.info(f"News database updated: {new_items_count} new articles added, {existing_items_count} existing articles skipped, {error_items_count} errors")
     except Exception as e:
         logger.error(f"Error storing news: {str(e)}")
         raise
@@ -88,13 +100,13 @@ def cleanup_old_news():
     try:
         conn = sqlite3.connect('security_news.db')
         cursor = conn.cursor()
-        
+
         # Delete items older than 90 days
         cursor.execute("""
-            DELETE FROM news 
+            DELETE FROM news
             WHERE date < date('now', '-90 days')
         """)
-        
+
         deleted_count = cursor.rowcount
         conn.commit()
         logger.info(f"Removed {deleted_count} old news items")
@@ -108,26 +120,36 @@ def main():
     """Main function to update news database"""
     try:
         logger.info("Starting news update process")
-        
+
         # Initialize database if needed
         init_db()
-        
-        # Fetch new articles
-        news_items = fetch_security_news()
+
+        # Set target date to today
+        today = datetime.now().date()
+        logger.info(f"Fetching news specifically for today: {today}")
+
+        # Fetch today's articles
+        news_items = fetch_security_news(target_date=today)
+
+        # If no today's articles found, try fetching without date filter as fallback
+        if news_items.empty:
+            logger.info("No articles found for today, fetching latest news as fallback")
+            news_items = fetch_security_news()
+
         if not news_items.empty:
             # Store new articles
             store_news(news_items)
-            
+
             # Cleanup old articles
             cleanup_old_news()
-            
+
             logger.info("News update completed successfully")
         else:
             logger.warning("No new articles found")
-            
+
     except Exception as e:
         logger.error(f"Error in main update process: {str(e)}")
         raise
 
 if __name__ == "__main__":
-    main() 
+    main()
